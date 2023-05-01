@@ -120,8 +120,10 @@ class CMakeBuildExt(build_ext):
 # We have to ensure build_ext being executed earlier than build_py.
 # A temporary workaround is to modifying the order of sub_commands in build class
 from distutils.command.build import build
+print (build.sub_commands)
 build.sub_commands = ([c for c in build.sub_commands if c[0] == 'build_ext'] +
                       [c for c in build.sub_commands if c[0] != 'build_ext'])
+print (build.sub_commands)
 
 settings = {
     'name': metadata.get('NAME', None),
