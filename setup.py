@@ -85,6 +85,8 @@ class CMakeBuildExt(build_ext):
     def build_cmake(self, extension):
         import pyscf as test_pyscf_import
         print (test_pyscf_import.__path__)
+        import numpy as np
+        print (np.__path__)
         self.announce('Configuring extensions', level=3)
         src_dir = os.path.abspath(os.path.join(__file__, '..', 'pyscf', 'lib'))
         cmd = ['cmake', f'-S{src_dir}', f'-B{self.build_temp}']
@@ -120,10 +122,8 @@ class CMakeBuildExt(build_ext):
 # We have to ensure build_ext being executed earlier than build_py.
 # A temporary workaround is to modifying the order of sub_commands in build class
 from distutils.command.build import build
-print (build.sub_commands)
 build.sub_commands = ([c for c in build.sub_commands if c[0] == 'build_ext'] +
                       [c for c in build.sub_commands if c[0] != 'build_ext'])
-print (build.sub_commands)
 
 settings = {
     'name': metadata.get('NAME', None),
