@@ -82,7 +82,7 @@ endif (HAS_IPO)
 option(PYSCF_SOURCE_DIR "Pyscf source directory e.g. /usr/local/lib/python3.7/site-packages/pyscf")
 if(NOT PYSCF_SOURCE_DIR)
   execute_process(
-    COMMAND python -c "import pyscf; print(pyscf.__path__[0], end='')"
+    COMMAND python -c "import pyscf; print(list(pyscf.__path__)[0], end='')"
     OUTPUT_VARIABLE PYSCF_SOURCE_DIR)
 endif()
 message(STATUS "Include pyscf source dir: ${PYSCF_SOURCE_DIR}")
