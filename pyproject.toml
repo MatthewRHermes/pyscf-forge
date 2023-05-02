@@ -1,2 +1,2 @@
 [build-system]
-requires = ["pyscf", "numpy"]
+requires = ["setuptools", "wheel", "pyscf", "numpy"]
