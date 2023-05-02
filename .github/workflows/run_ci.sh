@@ -9,7 +9,7 @@ sudo apt-get -qq install \
     curl
 
 python -m pip install --upgrade pip
-pip install .
+pip install . --use-pep517
 
 # TODO: check if pyscf code is changed using dist-info file
 pip uninstall -y pyscf-forge
