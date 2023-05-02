@@ -8,7 +8,7 @@ sudo apt-get -qq install \
     cmake \
     curl
 
-python -m pip install --upgrade pip<=23.0.1
+python -m pip install pip==23.0.1
 pip install .
 
 # TODO: check if pyscf code is changed using dist-info file
