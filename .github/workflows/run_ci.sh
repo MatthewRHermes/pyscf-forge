@@ -8,7 +8,7 @@ sudo apt-get -qq install \
     cmake \
     curl
 
-python -m pip install --upgrade pip
+python -m pip install --upgrade pip setuptools
 pip install .
 
 # TODO: check if pyscf code is changed using dist-info file
