@@ -85,8 +85,7 @@ class CMakeBuildExt(build_ext):
     def build_cmake(self, extension):
         import pyscf as test_pyscf_import
         print (test_pyscf_import.__path__)
-        import numpy as np
-        print (np.__path__)
+        print (sys.path)
         self.announce('Configuring extensions', level=3)
         src_dir = os.path.abspath(os.path.join(__file__, '..', 'pyscf', 'lib'))
         cmd = ['cmake', f'-S{src_dir}', f'-B{self.build_temp}']
