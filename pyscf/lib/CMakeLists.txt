@@ -84,7 +84,11 @@ if(NOT PYSCF_SOURCE_DIR)
   execute_process(
     COMMAND python -c "import pyscf; print(list(pyscf.__path__)[0], end='')"
     OUTPUT_VARIABLE PYSCF_SOURCE_DIR)
+  execute_process(
+    COMMAND which python
+    OUTPUT_VARIABLE PYTHON_SOURCE)
 endif()
+message(STATUS "which python output: ${PYTHON_SOURCE}")
 message(STATUS "Include pyscf source dir: ${PYSCF_SOURCE_DIR}")
 include_directories(${PYSCF_SOURCE_DIR}/lib ${PYSCF_SOURCE_DIR}/lib/deps/include)
 include_directories(${CINT_DIR}/include)
