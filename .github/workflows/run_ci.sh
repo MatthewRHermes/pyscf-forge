@@ -8,8 +8,8 @@ sudo apt-get -qq install \
     cmake \
     curl
 
-python -m pip install --upgrade pip23.0
-pip23.0 install .
+python -m pip install --upgrade pip<=23.0.1
+pip install .
 
 # TODO: check if pyscf code is changed using dist-info file
-pip23.0 uninstall -y pyscf-forge
+pip uninstall -y pyscf-forge
