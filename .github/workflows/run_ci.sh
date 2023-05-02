@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+u#!/usr/bin/env bash
 
 set -e
 
@@ -11,7 +11,9 @@ sudo apt-get -qq install \
 python -m pip install --upgrade pip
 python -m pip install pyscf
 python_path=$(which python)
+pip_path=$(which pip)
 echo "Python path in run_ci.sh is ${python_path}"
+echo "pip path in run_ci.sh is ${pip_path}"
 pyscf_path=$(python -c "import pyscf; print (list(pyscf.__path__)[0], end='')")
 echo "PySCF path in run_ci.sh is ${pyscf_path}"
 site_packages=$(echo "${pyscf_path%/*}")
