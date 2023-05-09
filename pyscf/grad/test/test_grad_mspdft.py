@@ -86,6 +86,10 @@ class KnownValues(unittest.TestCase):
             # TODO: redesign this test case. explicitly mixing CI vectors
             # like this is undefined behavior
          for mca, atype in zip (mcs, ('nomix','mix')):
+          if 'no' not in atype:
+            continue
+            # TODO: redesign this test case. MS-PDFT "_mix" is undefined except
+            # for L-PDFT and XMS-PDFT, whose gradients aren't implemented yet
           for mc, itype in zip (mca, ('conv', 'DF')):
             ci_arr = np.asarray (mc.ci)
             if itype == 'conv': mc_grad = mc.nuc_grad_method ()
@@ -127,6 +131,10 @@ class KnownValues(unittest.TestCase):
             # TODO: redesign this test case. explicitly mixing CI vectors
             # like this is undefined behavior
          for mca, atype in zip (mcs, ('nomix','mix')):
+          if 'no' not in atype:
+            continue
+            # TODO: redesign this test case. MS-PDFT "_mix" is undefined except
+            # for L-PDFT and XMS-PDFT, whose gradients aren't implemented yet
           for mc, itype in zip (mca, ('conv', 'DF')):
             ci_arr = np.asarray (mc.ci)
             if itype == 'conv': mc_grad = mc.nuc_grad_method ()
