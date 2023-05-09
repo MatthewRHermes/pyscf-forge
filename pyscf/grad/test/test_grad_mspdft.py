@@ -81,10 +81,6 @@ class KnownValues(unittest.TestCase):
 
     def test_offdiag_response_sanity (self):
         for mcs, stype in zip (get_mc_list (), ('nosymm','symm')):
-         if 'no' not in stype:
-            continue
-            # TODO: redesign this test case. explicitly mixing CI vectors
-            # like this is undefined behavior
          for mca, atype in zip (mcs, ('nomix','mix')):
           if 'no' not in atype:
             continue
@@ -126,10 +122,6 @@ class KnownValues(unittest.TestCase):
 
     def test_offdiag_grad_sanity (self):
         for mcs, stype in zip (get_mc_list (), ('nosymm','symm')):
-         if 'no' not in stype:
-            continue
-            # TODO: redesign this test case. explicitly mixing CI vectors
-            # like this is undefined behavior
          for mca, atype in zip (mcs, ('nomix','mix')):
           if 'no' not in atype:
             continue
