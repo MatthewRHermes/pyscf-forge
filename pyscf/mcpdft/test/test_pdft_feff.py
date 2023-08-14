@@ -72,19 +72,21 @@ def contract_veff(mc, mo_coeff, ci, veff1, veff2, ncore=None, ncas=None):
         ncas = mc.ncas
     
     nocc = ncore + ncas
-    nelecas = mc.nelecas
 
     casdm1s = mc.make_one_casdm1s(ci)
     casdm1 = casdm1s[0] + casdm1s[1]
     casdm2 = mc.make_one_casdm2(ci)
 
-    veff1 = mo_coeff.conj().T @ veff1 @ mo_coeff
+    dm1s = _dms.casdm1s_to_dm1s(mc, casdm1s, mo_coeff=mo_coeff)
+    dm1 = dm1s[0] + dm1s[1]
 
-    ref_e = np.trace(veff1[:ncore, :ncore]) + veff2.energy_core
-    ref_e += np.tensordot((veff1 + veff2.vhf_c)[ncore:nocc, ncore:nocc], casdm1)
+    ref_e = np.tensordot(veff1, dm1)
+    ref_e += veff2.energy_core
+    ref_e += np.tensordot(veff2.vhf_c[ncore:nocc, ncore:nocc], casdm1)
     ref_e += 0.5 * np.tensordot(veff2.papa[ncore:nocc, : , ncore:nocc, :], casdm2, axes=4)
     return ref_e
 
+print_me = True
 
 def case(kv, mc):
     ncore, ncas, nelecas = mc.ncore, mc.ncas, mc.nelecas
@@ -95,10 +97,14 @@ def case(kv, mc):
     fcasscf.__dict__.update(mc.__dict__)
 
     casdm1, casdm2 = mc.fcisolver.make_rdm12(mc.ci, ncas, nelecas)
-    cascm2 = _dms.dm2_cumulant(casdm2, casdm1)
 
     feff1, feff2 = mc.get_pdft_feff(mc.mo_coeff, mc.ci, paaa_only=True)
-    veff1, veff2 = mc.get_pdft_veff(mc.mo_coeff, mc.ci, incl_coul=False, paaa_only=True, drop_mcwfn=True)
+
+
+    veff1, veff2 = mc.get_pdft_veff(mc.mo_coeff, mc.ci, incl_coul=False, paaa_only=False)
+    ref_c_veff = contract_veff(mc, mc.mo_coeff, mc.ci, veff1, veff2)
+    
+    veff1, veff2 = mc.get_pdft_veff(mc.mo_coeff, mc.ci, incl_coul=False, paaa_only=True)
 
     print ("eff1:", lib.fp (veff1+feff1))
     nocc = ncore + ncas
@@ -125,7 +131,7 @@ def case(kv, mc):
     print ("feff2.energy_core (ncas=2):", f_energy_core)
     print ("energy_core (ncas=2):", energy_core_2)
 
-    ref_c_veff = contract_veff(mc, mc.mo_coeff, mc.ci, veff1, veff2)
+
 
     with lib.temporary_env(fcasscf, get_hcore=lambda:  feff1):
         g_feff, _, _, hdiag_feff = newton_casscf.gen_g_hop(fcasscf, mc.mo_coeff, mc.ci, feff2)
@@ -151,7 +157,7 @@ def case(kv, mc):
     def seminum(x):
         uorb, ci1 = newton_casscf.extract_rotation(fcasscf, x, 1, mc.ci)
         mo1 = mc.rotate_mo(mc.mo_coeff, uorb)
-        veff1_1, veff2_1 = mc.get_pdft_veff(mo=mo1, ci=ci1, incl_coul=False, paaa_only=True, drop_mcwfn=True)
+        veff1_1, veff2_1 = mc.get_pdft_veff(mo=mo1, ci=ci1, incl_coul=False, paaa_only=False)
         semi_num_c_veff = contract_veff(mc, mo1, ci1, veff1_1, veff2_1)
         return semi_num_c_veff - ref_c_veff
 
@@ -161,7 +167,6 @@ def case(kv, mc):
         dg_test = np.dot(g_all, x1)
         dg_ref = seminum(x1)
         dg_err = abs((dg_test - dg_ref)/dg_ref)
-        #print(f"ratio: {dg_test/dg_ref: .4f}, \t{dg_test} {dg_ref} ")
         err_tab = np.append(err_tab, [[x1_norm, dg_err]], axis=0)
         if ix > 0:
             conv_tab = err_tab[1:ix+1, :] / err_tab[:ix, :]
@@ -173,9 +178,9 @@ def case(kv, mc):
     with kv.subTest(q='x'):
         kv.assertAlmostEqual(conv_tab[-1, 0], 0.5, 9)
 
-    # with kv.subTest(q='de'):
-    #     kv.assertLess(abs(err_tab[-1, 1]), 1e-3)
-    #     kv.assertAlmostEqual(conv_tab[-1, 1], 0.5, delta=0.05)
+    with kv.subTest(q='de'):
+        kv.assertLess(abs(err_tab[-1, 1]), 1e-3)
+        kv.assertAlmostEqual(conv_tab[-1, 1], 0.5, delta=0.05)
 
 class KnownValues(unittest.TestCase):
 
@@ -194,7 +199,6 @@ class KnownValues(unittest.TestCase):
                 print(f"mol = {mol} state = {state} fnal = {fnal} ncas = {ncas}")
                 case(self, mc)
         #for mol, mf in zip(("H2", "LiH"), (h2, lih)):
-        ##for mol, mf in zip(["LiH"], [lih]):
         #    for state, nel in zip(('Singlet', 'Triplet'), (2, (2, 0))):
         #        for fnal in ('tLDA,VWN3', 'ftLDA,VWN3', 'tPBE', 'ftPBE'):
         #            mc = mcpdft.CASSCF(mf, fnal, 2, nel, grids_level=1).run()
