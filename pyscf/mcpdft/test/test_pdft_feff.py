@@ -100,6 +100,31 @@ def case(kv, mc):
     feff1, feff2 = mc.get_pdft_feff(mc.mo_coeff, mc.ci, paaa_only=True)
     veff1, veff2 = mc.get_pdft_veff(mc.mo_coeff, mc.ci, incl_coul=False, paaa_only=True, drop_mcwfn=True)
 
+    print ("eff1:", lib.fp (veff1+feff1))
+    nocc = ncore + ncas
+    aaaa = veff2.ppaa[ncore:nocc,ncore:nocc] + feff2.ppaa[ncore:nocc,ncore:nocc]
+    aaaa_2 = aaaa[-2:,-2:,-2:,-2:]
+    print ("aaaa (ncas=2):", aaaa_2)
+    v_vhf_c = veff2.vhf_c[ncore:nocc,ncore:nocc]
+    v_vhf_c_2 = v_vhf_c[-2:,-2:]
+    f_vhf_c = feff2.vhf_c[ncore:nocc,ncore:nocc]
+    f_vhf_c_2 = f_vhf_c[-2:,-2:]
+    if ncas==3:
+        v_vhf_c_2 += 2*veff2.ppaa[0,0,1:,1:] - veff2.papa[0,1:,0,1:]
+        f_vhf_c_2 += 2*feff2.ppaa[0,0,1:,1:] - feff2.papa[0,1:,0,1:]
+    print ("veff2.vhf_c (ncas=2):", v_vhf_c_2)
+    print ("feff2.vhf_c (ncas=2):", f_vhf_c_2)
+    v_energy_core = veff2.energy_core
+    f_energy_core = feff2.energy_core
+    energy_core_2 = veff2.energy_core + feff2.energy_core
+    if ncas==3:
+        v_energy_core += veff2.ppaa[0,0,0,0]
+        f_energy_core += feff2.ppaa[0,0,0,0]
+        energy_core_2 += aaaa[0,0,0,0]
+    print ("veff2.energy_core (ncas=2):", v_energy_core)
+    print ("feff2.energy_core (ncas=2):", f_energy_core)
+    print ("energy_core (ncas=2):", energy_core_2)
+
     ref_c_veff = contract_veff(mc, mc.mo_coeff, mc.ci, veff1, veff2)
 
     with lib.temporary_env(fcasscf, get_hcore=lambda:  feff1):
@@ -136,10 +161,11 @@ def case(kv, mc):
         dg_test = np.dot(g_all, x1)
         dg_ref = seminum(x1)
         dg_err = abs((dg_test - dg_ref)/dg_ref)
-        print(f"ratio: {dg_test/dg_ref: .4f}, \t{dg_test} {dg_ref} ")
+        #print(f"ratio: {dg_test/dg_ref: .4f}, \t{dg_test} {dg_ref} ")
         err_tab = np.append(err_tab, [[x1_norm, dg_err]], axis=0)
         if ix > 0:
             conv_tab = err_tab[1:ix+1, :] / err_tab[:ix, :]
+            print (conv_tab[-1])
 
         if ix > 1 and np.all(np.abs(conv_tab[-3:, -1] - 0.5) < 0.01) and abs(err_tab[-1, 1]) < 1e-3:
             break
@@ -155,15 +181,27 @@ class KnownValues(unittest.TestCase):
 
     def test_dvot(self):
         np.random.seed(1)
-        for mol, mf in zip(("H2", "LiH"), (h2, lih)):
-        #for mol, mf in zip(["LiH"], [lih]):
-            for state, nel in zip(('Singlet', 'Triplet'), (2, (2, 0))):
-                for fnal in ('tLDA,VWN3', 'ftLDA,VWN3', 'tPBE', 'ftPBE'):
-                    mc = mcpdft.CASSCF(mf, fnal, 2, nel, grids_level=1).run()
-                    with self.subTest(mol=mol, state=state, fnal=fnal):
-                        print("----------------------------------------------------------------------")
-                        print(f"mol = {mol} state = {state} fnal = {fnal}")
-                        case(self, mc)
+        mol, mf, state, fnal = "LiH", lih, 'Singlet', 'ftLDA,VWN3'
+        mc0 = mcpdft.CASSCF(mf, fnal, 2, 2, grids_level=1).run()
+        ci0 = mc0.ci.copy ()
+        for ncas, nelecas in zip ((2, 3), (2, 4)):
+            mc = mcpdft.CASSCF(mf, fnal, ncas, nelecas, grids_level=1).run()
+            mc.mo_coeff = mc0.mo_coeff
+            mc.ci[:,:] = 0
+            mc.ci[:ci0.shape[0],:ci0.shape[1]] = ci0[:,:]
+            with self.subTest(mol=mol, state=state, fnal=fnal):
+                print("----------------------------------------------------------------------")
+                print(f"mol = {mol} state = {state} fnal = {fnal} ncas = {ncas}")
+                case(self, mc)
+        #for mol, mf in zip(("H2", "LiH"), (h2, lih)):
+        ##for mol, mf in zip(["LiH"], [lih]):
+        #    for state, nel in zip(('Singlet', 'Triplet'), (2, (2, 0))):
+        #        for fnal in ('tLDA,VWN3', 'ftLDA,VWN3', 'tPBE', 'ftPBE'):
+        #            mc = mcpdft.CASSCF(mf, fnal, 2, nel, grids_level=1).run()
+        #            with self.subTest(mol=mol, state=state, fnal=fnal):
+        #                print("----------------------------------------------------------------------")
+        #                print(f"mol = {mol} state = {state} fnal = {fnal}")
+        #                case(self, mc)
 
 
     # def test_feff_ao2mo(self):
