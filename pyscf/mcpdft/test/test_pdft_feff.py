@@ -105,9 +105,9 @@ def case(kv, mc):
     aaaa = veff2.ppaa[ncore:nocc,ncore:nocc] + feff2.ppaa[ncore:nocc,ncore:nocc]
     aaaa_2 = aaaa[-2:,-2:,-2:,-2:]
     print ("aaaa (ncas=2):", aaaa_2)
-    v_vhf_c = veff2.vhf_c[ncore:nocc,ncore:nocc]
+    v_vhf_c = veff2.vhf_c[ncore:nocc,ncore:nocc].copy ()
     v_vhf_c_2 = v_vhf_c[-2:,-2:]
-    f_vhf_c = feff2.vhf_c[ncore:nocc,ncore:nocc]
+    f_vhf_c = feff2.vhf_c[ncore:nocc,ncore:nocc].copy ()
     f_vhf_c_2 = f_vhf_c[-2:,-2:]
     if ncas==3:
         v_vhf_c_2 += 2*veff2.ppaa[0,0,1:,1:] - veff2.papa[0,1:,0,1:]
