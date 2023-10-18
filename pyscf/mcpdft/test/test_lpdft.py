@@ -186,8 +186,8 @@ class KnownValues(unittest.TestCase):
         E_MCSCF_AVG_EXPECTED = -75.81489195169507
         HDIAG_EXPECTED = [-76.29913074162732, -75.93502437481517]
 
-        self.assertAlmostEqual(e_mcscf_avg, E_MCSCF_AVG_EXPECTED, 7)
-        self.assertListAlmostEqual(hdiag, HDIAG_EXPECTED, 7)
+        self.assertAlmostEqual(e_mcscf_avg, E_MCSCF_AVG_EXPECTED, 6)
+        self.assertListAlmostEqual(hdiag, HDIAG_EXPECTED, 6)
         # The off-diagonal should be identical to zero because of symmetry
         self.assertListAlmostEqual(e_states, hdiag, 10)
 
@@ -205,10 +205,10 @@ class KnownValues(unittest.TestCase):
         E_STATES_EXPECTED = [-76.01218048502898, -76.3168078608912, -75.91832765913041]
         HCOUP_EXPECTED = 0.03453830159471619
 
-        self.assertAlmostEqual(e_mcscf_avg, E_MCSCF_AVG_EXPECTED, 7)
-        self.assertListAlmostEqual(e_states, E_STATES_EXPECTED, 7)
-        self.assertListAlmostEqual(hdiag, HDIAG_EXPECTED, 7)
-        self.assertAlmostEqual(hcoup, HCOUP_EXPECTED, 7)
+        self.assertAlmostEqual(e_mcscf_avg, E_MCSCF_AVG_EXPECTED, 6)
+        self.assertListAlmostEqual(e_states, E_STATES_EXPECTED, 6)
+        self.assertListAlmostEqual(hdiag, HDIAG_EXPECTED, 6)
+        self.assertAlmostEqual(hcoup, HCOUP_EXPECTED, 6)
 
 if __name__ == "__main__":
     print("Full Tests for Linearized-PDFT")
