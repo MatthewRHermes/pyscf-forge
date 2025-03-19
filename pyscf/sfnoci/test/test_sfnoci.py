@@ -10,6 +10,8 @@ def setUpModule():
     mol = gto.Mole()
     mol.atom = [['Li', (0, 0, 0)],['F',(0,0,1.3)]]
     mol.basis = 'ccpvtz'
+    mol.output = '/dev/null'
+    mol.verbose = 0
     mr=scf.RHF(mol)
     mr.kernel()
 
@@ -33,6 +35,8 @@ class KnownValues(unittest.TestCase):
         mol.atom = [['Li', (0, 0, 0)],['F',(0,0,1.6)]]
         mol.basis = 'ccpvtz'
         mol.spin=2
+        mol.output = '/dev/null'
+        mol.verbose = 0
         mol.build(0,0)
         rm=scf.ROHF(mol)
         dm_ro=rm.make_rdm1(mo0,ro_occ)
@@ -71,6 +75,8 @@ class KnownValues(unittest.TestCase):
         mol.atom = [['Li', (0, 0, 0)],['F',(0,0,1.6)]]
         mol.basis = 'ccpvtz'
         mol.spin=2
+        mol.output = '/dev/null'
+        mol.verbose = 0
         mol.build(0,0)
         rm=scf.ROHF(mol)
         dm_ro=rm.make_rdm1(mo0,ro_occ)
