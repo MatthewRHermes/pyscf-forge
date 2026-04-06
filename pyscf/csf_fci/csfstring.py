@@ -910,6 +910,7 @@ def get_csfvec_shape (norb, neleca, nelecb, smult):
     return min_npair, npair_offset[:-1], npair_dconf_size, npair_sconf_size, npair_csf_size
 
 def get_spin_evecs (nspin, neleca, nelecb, smult, max_memory=param.MAX_MEMORY):
+    m0 = lib.current_memory ()[0]
     ms = (neleca - nelecb) / 2
     s = (smult - 1) / 2
     #assert (neleca >= nelecb)
@@ -933,7 +934,8 @@ def get_spin_evecs (nspin, neleca, nelecb, smult, max_memory=param.MAX_MEMORY):
         ncsf, len (scstrs), nspin, s)
 
     mem_current = lib.current_memory ()[0]
-    mem_rem = max_memory - mem_current
+    deltam = mem_current - m0
+    mem_rem = max_memory - deltam
     mem_reqd = ndet * ncsf * np.dtype (np.float64).itemsize / 1e6
     if mem_reqd > mem_rem:
         memstr = ('CSF unitary matrix for {} unpaired of {} total electrons w/ s={:.1f} is too big'
