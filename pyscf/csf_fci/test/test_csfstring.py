@@ -58,7 +58,7 @@ class KnownValues(unittest.TestCase):
     def test_memory_management (self):
         # Currently only the get_spin_evecs function
         with self.assertRaises (MemoryError):
-            get_spin_evecs (10, 5, 5, 1, max_memory=1)
+            get_spin_evecs (10, 5, 5, 1, max_memory=0.01)
 
     def test_many_determinants (self):
         # Prove that there is no integer overrun for 26 singly-occupied orbitals
