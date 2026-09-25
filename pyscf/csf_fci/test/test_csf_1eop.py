@@ -19,7 +19,6 @@ import unittest
 from functools import reduce
 from itertools import product
 import numpy as np
-from scipy import linalg
 from pyscf import gto
 from pyscf import scf
 from pyscf import ao2mo
@@ -27,11 +26,13 @@ from pyscf import fci
 from pyscf import lib
 from pyscf.fci import fci_slow
 from pyscf.fci.spin_op import spin_square0
-from pyscf.fci.addons import des_a, des_b
 from pyscf.csf_fci import csf_solver
 from pyscf.csf_fci.csfstring import CSFTransformer
+from pyscf.csf_fci.test.old_pspace import pspace as old_pspace
+from pyscf.fci.addons import des_a, des_b
 
-# This variant of test_csf.py just adds printouts
+# This variant of test_csf.py just sets g2e[:] = 0 in order to validate that csf_Eai and csf_Sai
+# are fully debugged in both the diagonal (make_hdiag_csf) and off-diagonal (pspace) cases.
 
 def setUpModule():
     global mol, m, h1e, g2e, sol
@@ -61,18 +62,17 @@ def setUpModule():
     ehf = m.scf()
 
     neleca = (mol.nelectron+1)//2 # round up
-    #neleca = 2
 
     norb = m.mo_coeff.shape[1]
     nelec = (neleca, neleca)
     h1e = reduce(np.dot, (m.mo_coeff.T, m.get_hcore(), m.mo_coeff))
-    #h1e[:] = 0
+    #h1e[:] = 1
     h1e_s = (2 * rng.random (h1e.shape)) - 1
     h1e_s += h1e_s.conj ().T
     #h1e_s[:] = 0
     h1e = np.stack ([h1e+h1e_s, h1e-h1e_s], axis=0)
     g2e = ao2mo.incore.general(m._eri, (m.mo_coeff,)*4, compact=False)
-    #g2e[:] = 0
+    g2e[:] = 0
     neleci = (neleca, neleca-1)
     sol = csf_solver (mol, smult=1)
     nel = (neleci, nelec)
@@ -123,6 +123,7 @@ class KnownValues(unittest.TestCase):
                 self.assertAlmostEqual (smulttest, smult, 8)
                 self.assertAlmostEqual (e, refs[smult-1], 8)
 
+    #@unittest.skip('debug')
     def test_hdiag_csf (self):
         nel = (neleci, nelec)
         for smult in range (1,smult_lim):
@@ -136,21 +137,77 @@ class KnownValues(unittest.TestCase):
                     self.assertAlmostEqual (lib.fp (hdiag), lib.fp (hdiag_ref), 8)
 
 
+    #@unittest.skip('debug')
     def test_pspace(self):
         nel = (neleci, nelec)
         for smult in range (1,smult_lim):
             with self.subTest (smult=smult):
                 ne = nel[smult % 2]
                 addr, h0 = sol.pspace (h1e, g2e, norb, ne, smult=smult)
-                t = sol.transformer
                 h0_ref = get_h2mat_ref (ne, smult)[addr,:][:,addr]
-                print (norb, ne, smult)
-                for i in range (len (h0)):
-                    for j in range (i):
-                        if abs (h0[i,j] - h0_ref[i,j]) > 1e-8:
-                            print (t.printable_csfstring (i), t.printable_csfstring (j),
-                                   h0[i,j], h0_ref[i,j])
                 self.assertAlmostEqual (lib.fp (h0), lib.fp (h0_ref), 8)
+
+    #@unittest.skip('debug')
+    def test_old_pspace(self):
+        nel = (neleci, nelec)
+        for smult in range (1,smult_lim):
+            with self.subTest (smult=smult):
+                ne = nel[smult % 2]
+                sol.smult = smult
+                sol.norb = norb
+                sol.nelec = ne
+                sol.check_transformer_cache ()
+                addr, h0 = old_pspace (sol, h1e, g2e, norb, ne, sol.transformer)
+                h0_ref = get_h2mat_ref (ne, smult)[addr,:][:,addr]
+                self.assertAlmostEqual (lib.fp (h0), lib.fp (h0_ref), 8)
+
+    def test_csf_pair_removal_sign (self):
+        ''' Ensure that pair removal or pair addition doesn't change the sign of
+        a CSF-basis CI vector '''
+        for smult, ndocc, nvirt in product (range (1,5), range(1,5), range(4)):
+            if smult==1 and ndocc==0: continue
+            nelec = ((smult-1) + ndocc, ndocc)
+            norb = (smult-1) + ndocc + nvirt
+            trans_k = CSFTransformer (norb, nelec[0], nelec[1], smult)
+            trans_b = CSFTransformer (norb, nelec[0]-1, nelec[1]-1, smult)
+            dket, sket, tket = trans_k.csfaddrs2str (list (range (trans_k.ncsf)))
+            dbra, sbra, tbra = trans_b.csfaddrs2str (list (range (trans_b.ncsf)))
+            dket = np.maximum (dket, 0)
+            dbra = np.maximum (dbra, 0)
+            for iorb in range (norb):
+                ikets = dket>=0
+                ikets = ikets & np.remainder (dket // (2**iorb), 2)
+                ikets = np.where (ikets)[0]
+                if len (ikets) > 1:
+                    ikets = rng.choice (ikets, size=1)
+                lbls = trans_k.printable_csfstring (ikets)
+                for iket, klbl in zip (ikets, lbls):
+                    dk, sk, tk = dket[iket], sket[iket], tket[iket]
+                    ispin = iorb
+                    for jorb in range (iorb):
+                        if (dk & (1 << jorb)):
+                            ispin -= 1
+                    dconf = dk ^ (1 << iorb)
+                    sconf_right = sk & ((1 << ispin)-1)
+                    sconf_left = (sk >> ispin) << ispin
+                    sconf = (sconf_left << 1) | sconf_right
+                    ibra = (dbra==dconf) & (sbra==sconf) & (tbra==tket[iket])
+                    ibra = np.where (ibra)[0]
+                    assert (len (ibra) == 1)
+                    ibra = ibra[0]
+                    blbl = trans_b.printable_csfstring (ibra)
+                    db, sb, tb = dbra[ibra], sbra[ibra], tbra[ibra]
+                    ci_ket = np.zeros (trans_k.ncsf)
+                    ci_ket[iket] = 1.0
+                    ci_ket = trans_k.vec_csf2det (ci_ket)
+                    ci_bra = np.zeros (trans_b.ncsf)
+                    ci_bra[ibra] = 1.0
+                    ci_bra = trans_b.vec_csf2det (ci_bra)
+                    ci1 = des_b (ci_ket, norb, nelec, iorb)
+                    ci1 = des_a (ci1, norb, (nelec[0], nelec[1]-1), iorb)
+                    ovlp = np.dot (ci_bra.ravel ().conj (), ci1.ravel ())
+                    msg = f'<{blbl}|b{iorb}a{iorb}|{klbl}> = {ovlp}'
+                    self.assertAlmostEqual (ovlp, 1.0, 9, msg=msg)
 
 if __name__ == "__main__":
     print("Full Tests for csf_fci solver")
