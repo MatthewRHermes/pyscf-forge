@@ -48,7 +48,7 @@ def setUpModule():
         ['H', ( 0., 1.    , 1.   )],
     ]
     mol.spin = len (mol.atom) % 2
-    smult_lim = 3 #len (mol.atom) + 2
+    smult_lim = 5 #len (mol.atom) + 2
 
     mol.basis = {'H': 'sto-3g'}
     mol.build()
@@ -58,18 +58,18 @@ def setUpModule():
     ehf = m.scf()
 
     neleca = (mol.nelectron+1)//2 # round up
-    neleca = 1
+    neleca = 2
 
     norb = m.mo_coeff.shape[1]
     nelec = (neleca, neleca)
     h1e = reduce(np.dot, (m.mo_coeff.T, m.get_hcore(), m.mo_coeff))
-    #h1e[:] = 0
+    h1e[:] = 0
     h1e_s = (2 * rng.random (h1e.shape)) - 1
     h1e_s += h1e_s.conj ().T
-    #h1e_s[:] = 0
+    h1e_s[:] = 0
     h1e = np.stack ([h1e+h1e_s, h1e-h1e_s], axis=0)
     g2e = ao2mo.incore.general(m._eri, (m.mo_coeff,)*4, compact=False)
-    #g2e[:] = 1
+    g2e[:] = 1
     neleci = (neleca, neleca-1)
     sol = csf_solver (mol, smult=1)
     nel = (neleci, nelec)
