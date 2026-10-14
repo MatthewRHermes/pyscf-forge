@@ -30,6 +30,17 @@
 #define DEBUG_2E_CGC false
 #endif
 
+// The running spin "between" the two electrons of a doubly-occupied orbital is formally undefined
+// (Drake & Schlesinger Fig. 2: it drops out of every graph). It is nevertheless stored in the twoS
+// arrays by _get_spinindices1/2. Nothing should depend on it; these hooks let dev_csf_op/probe.py
+// set it to the other legal value or to a value of the wrong parity to detect any code that reads it.
+#ifndef PAIR_MID1
+#define PAIR_MID1(x) ((x)+1)
+#endif
+#ifndef PAIR_MID2
+#define PAIR_MID2(x) ((x)+1)
+#endif
+
 void FCICSFmakeS2mat (double * S2mat, uint64_t * detstr, size_t ndet, int nspin, int twoMS)
 {
 
@@ -833,7 +844,7 @@ void _get_spinindices1 (Str3 * addr, unsigned int p, unsigned int nspin,
             assert ((int) (r+2) < (int) (nspin+1));
             twoS[r+2] = twoS[r];
         }
-        twoS[(*sp)+1] = twoS[(*sp)]+1;
+        twoS[(*sp)+1] = PAIR_MID1 (twoS[(*sp)]);
         (*sp)++;
     }
 }
@@ -861,7 +872,7 @@ void _get_spinindices2 (Str3 * addr, unsigned int p, unsigned int q,
             assert ((int) (r+2) < (int) (nspin+1));
             twoS[r+2] = twoS[r];
         }
-        twoS[(*sp)+1] = twoS[(*sp)]+1;
+        twoS[(*sp)+1] = PAIR_MID2 (twoS[(*sp)]);
         (*sp)++;
     } 
 }
