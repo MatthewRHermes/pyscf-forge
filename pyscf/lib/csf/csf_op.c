@@ -61,6 +61,7 @@ static void _shift_dummies (unsigned int * arr, unsigned int from){
 }
 static void _fix_pair_mids (unsigned int * twoSk, unsigned int * twoSb, int rule)
 {
+    if (rule == 0){ return; } // keep whatever PAIR_MID1/2 stored
     // For each recorded intermediate P[k] of a pair spanning P[k+1] -> P[k] -> P[k-1] (P[k+1] == P[k-1] == v),
     // choose P[k] from the facing chain O. dO1 = O[k]-O[k+1], dO2 = O[k-1]-O[k].
     for (int d=0; d<_ndummy; d++){
@@ -1029,63 +1030,73 @@ double csf_Sai (Str3 * bra, Str3 * ket, unsigned int a, unsigned int i, int twoM
     return fac;
 }
 
+// Move the closed pair of orbital src to orbital dst (dst must be empty). The spin coupling string
+// is unchanged because a closed pair carries no spin and the set of open shells is unchanged.
+static void _relocate_pair (Str3 * in, unsigned int src, unsigned int dst, Str3 * out)
+{
+    int occ[64];
+    for (unsigned int p=0; p<64; p++){ occ[p] = (int) _get_occ (in, p); }
+    assert (occ[src] == 2);
+    assert (occ[dst] == 0);
+    occ[src] = 0; occ[dst] = 2;
+    out->dconf = 0ULL; out->sconf = 0ULL;
+    unsigned int k = 0;
+    for (unsigned int p=0; p<64; p++){
+        if (occ[p] == 2){ out->dconf |= (1ULL << p); continue; }
+        if (occ[p] == 1){ out->sconf |= (1ULL << k); }
+        k++;
+    }
+    out->spin = (out->sconf == 0ULL) ? 0ULL : in->spin;
+}
+
 double csf_EaiEaj (Str3 * bra, Str3 * ket,
                    unsigned int i, unsigned int j)
 {
-    if (i == j){ return 1.0; }
-    if (i > j){
-        return csf_EaiEaj (bra, ket, j, i);
+    /* <bra|E_ai E_aj|ket>, where a is the orbital that is doubly occupied in bra and empty in ket.
+
+       On the (i,j) electrons, E_ai E_aj and E_ji act identically: both give sqrt(2) times the
+       singlet-coupled component and annihilate the triplet one. A closed pair is a spin scalar,
+       so moving it between orbitals changes no spin coupling (and costs no fermion sign). Hence
+       this is a single excitation between CSFs with one pair relocated, and csf_Eai (which reads
+       no undefined intermediate spins) can evaluate it:
+         nj = 1:      <bra(a->j)|E_ji|ket>
+         ni = 1:      <bra(a->i)|E_ij|ket>
+         ni = nj = 2: -<bra|E_ji|ket(j->a)>
+       (signs verified numerically against the resolution-of-the-identity oracle csf_EaiEbj_ri).
+       This replaces the old CGC_1e-based evaluation, which padded the bra chain with a fabricated
+       pair and read the undefined intermediate spin of doubly-occupied i or j. */
+    unsigned int a = 64;
+    for (unsigned int p=0; p<64; p++){
+        if (((int) _get_occ (bra, p) - (int) _get_occ (ket, p)) == 2){ a = p; break; }
     }
-    if (DEBUG_2E){
-    printf ("\n<%lu,%lu,%lu|%u,%u|%lu,%lu,%lu>\n",
-            bra->dconf, bra->sconf, bra->spin,
-            i, j,
-            ket->dconf, ket->sconf, ket->spin);
-    fflush (stdout);
-    }
-    Str3 brap, ketp;
-    _pad_Str3 (bra, &brap);
-    _pad_Str3 (ket, &ketp);
-    // CSF orthogonality
-    if (i>0){ if ((brap.spin & ((1ULL<<i)-1)) != (ketp.spin & ((1ULL<<i)-1))){
-        if (DEBUG_2E){ printf ("csf_EaiEaj right escape\n"); fflush (stdout); }
-        return 0.0;
-    }}
-    if ((brap.spin>>(j+1)) != (ketp.spin>>(j+1))){
-        if (DEBUG_2E){ printf ("csf_EaiEaj left escape\n"); fflush (stdout); }
-        return 0.0;
+    assert (a < 64);
+    if (a >= 64){ return 0.0; }
+    Str3 x;
+    if (i == j){
+        // A whole pair moves i -> a: <bra|E_ai E_ai|ket> = 2 if the spin couplings are identical,
+        // else 0. The caller's convention for this case includes the Hamiltonian's 1/2, so return 1.
+        _relocate_pair (bra, a, i, &x);
+        uint64_t sx = (x.sconf == 0ULL) ? 0ULL : x.spin;
+        uint64_t sk = (ket->sconf == 0ULL) ? 0ULL : ket->spin;
+        return ((x.dconf == ket->dconf) && (x.sconf == ket->sconf) && (sx == sk)) ? 1.0 : 0.0;
     }
     int ni = _get_occ (ket, i);
     int nj = _get_occ (ket, j);
-    unsigned int nspin_ket = count_set_bits (ket->sconf);
-    unsigned int nspin_bra = count_set_bits (bra->sconf);
-    nspin_ket += (ni-1)*2;
-    nspin_ket += (nj-1)*2;
-    assert ((nspin_bra+2)==nspin_ket);
-    unsigned int nspin=nspin_ket;
-    unsigned int * twoSk = malloc ((nspin+1) * sizeof (unsigned int));
-    unsigned int * twoSb = malloc ((nspin+1) * sizeof (unsigned int));
-    unsigned int si, sj;
-    _ndummy = 0;
-    _get_spinindices2 (ket, i, j, nspin, twoSk, &si, &sj);
-    if (abs (ni) == 2){ si++; }
-    for (unsigned int r=0; r <= nspin_bra; r++){
-        twoSb[r] = _get_twoS_running (bra->spin, r, nspin_bra);
+    double fac;
+    if (nj == 1){
+        _relocate_pair (bra, a, j, &x);
+        fac = csf_Eai (&x, ket, j, i);
+    } else if (ni == 1){
+        _relocate_pair (bra, a, i, &x);
+        fac = csf_Eai (&x, ket, i, j);
+    } else {
+        _relocate_pair (ket, j, a, &x);
+        fac = -csf_Eai (bra, &x, j, i);
     }
-    // TODO: this seems random. Double-check the validity
-    // the pair spins in a'a
-    twoSb[nspin_bra+1] = 1;
-    twoSb[nspin_bra+2] = 0;
-    _fix_pair_mids (twoSk, twoSb, DUMMY_RULE);
-    int parity = si + sj;
-    double fac = CGC_1e (twoSk, twoSb, si, sj, ni, nj, nspin);
-    if ((parity%2)==1){ fac = -fac; }
-    free (twoSk);
-    free (twoSb);
+    if (DEBUG_2E){ printf ("csf_EaiEaj <%lu,%lu,%lu|%u,%u|%lu,%lu,%lu> = %e\n",
+                           bra->dconf, bra->sconf, bra->spin, i, j, ket->dconf, ket->sconf, ket->spin, fac); }
     assert (fac==fac);
-    if (DEBUG_2E){ printf ("final value = %e\n\n", fac); fflush (stdout); }
     return fac;
-
 }
 
 

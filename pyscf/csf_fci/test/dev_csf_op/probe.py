@@ -13,7 +13,7 @@ TOP = r'''
 static long softhits[8000];
 static char ctx_call[256] = "";
 static char ctx_cgc[512] = "";
-static int ctx_nex = 3;
+static int ctx_nex = 0;
 static void _soft_hit (int line){
     softhits[line]++;
     if (softhits[line] <= ctx_nex){ fprintf (stderr, "EX line %d | %s | %s\n", line, ctx_call, ctx_cgc); }
@@ -40,11 +40,11 @@ void soft_reset (void){ for (int i=0;i<8000;i++){ softhits[i] = 0; w6jbad[i] = 0
 PAT = re.compile (r'^(\s*)parity \+= (.*);(.*)$')
 HOOKS = [
  ("    double xdiag = 1.0;\n    unsigned int twoS0b, twoS0k;\n    int offk = 0;\n    int offb = 0;\n    int parity = 0;\n    unsigned int i;\n",
-  "    double xdiag = 1.0;\n    unsigned int twoS0b, twoS0k;\n    int offk = 0;\n    int offb = 0;\n    int parity = 0;\n    unsigned int i;\n    _ctx_arrays (\"X\", twoSk, twoSb, nspin, t, q, r, p, nt, nq, nr, np);\n"),
+  "    double xdiag = 1.0;\n    unsigned int twoS0b, twoS0k;\n    int offk = 0;\n    int offb = 0;\n    int parity = 0;\n    unsigned int i; _ctx_arrays (\"X\", twoSk, twoSb, nspin, t, q, r, p, nt, nq, nr, np);\n"),
  ("    int parity = 0;\n    double xdiag = 1.0;\n    unsigned int twoS0k, twoS0b;\n",
-  "    int parity = 0;\n    double xdiag = 1.0;\n    unsigned int twoS0k, twoS0b;\n    _ctx_arrays (\"1e\", twoSk, twoSb, nspin, q, p, 0, 0, nq, np, 0, 0);\n"),
+  "    int parity = 0;\n    double xdiag = 1.0;\n    unsigned int twoS0k, twoS0b; _ctx_arrays (\"1e\", twoSk, twoSb, nspin, q, p, 0, 0, nq, np, 0, 0);\n"),
  ("    Str3 brap, ketp;\n    _pad_Str3 (bra, &brap);\n    _pad_Str3 (ket, &ketp);\n    // CSF orthogonality\n    unsigned int p = a;\n",
-  "    snprintf (ctx_call, 256, \"EaiEbj <%lu,%lu,%lu|%u'%u %u'%u|%lu,%lu,%lu>\", bra->dconf, bra->sconf, bra->spin, a, i, b, j, ket->dconf, ket->sconf, ket->spin);\n    Str3 brap, ketp;\n    _pad_Str3 (bra, &brap);\n    _pad_Str3 (ket, &ketp);\n    // CSF orthogonality\n    unsigned int p = a;\n"),
+  "    Str3 brap, ketp; snprintf (ctx_call, 256, \"EaiEbj <%lu,%lu,%lu|%u'%u %u'%u|%lu,%lu,%lu>\", bra->dconf, bra->sconf, bra->spin, a, i, b, j, ket->dconf, ket->sconf, ket->spin);\n    _pad_Str3 (bra, &brap);\n    _pad_Str3 (ket, &ketp);\n    // CSF orthogonality\n    unsigned int p = a;\n"),
 ]
 def softify (s):
     for o, n in HOOKS:
@@ -87,6 +87,7 @@ if __name__ == '__main__':
             for k in (1, 2):
                 print ('######## S%d' % k, flush=True)
                 lp = build (tmp, 'S%dbadex' % k, ['-DPAIR_MID%d(x)=%s' % (k, MID['bad'])], True)
+                ctypes.CDLL (lp).soft_set_nex (3)
                 sys.stderr.flush (); softrun (lp); sys.stderr.flush ()
         sys.exit (0)
     ref = fc.reference ()
