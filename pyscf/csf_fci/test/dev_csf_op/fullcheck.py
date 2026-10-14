@@ -83,7 +83,7 @@ def score (res, ref, verbose=False):
                 i, j = np.argwhere (bad & m)[0]
                 ex[tp] = (key, lbl[i], lbl[j], float (A[i,j]), float (R[i,j]))
     return cnt, tot, ex
-if __name__ == '__main__':
+if __name__ == '__main__' and os.environ.get ('FULLCHECK_STREAM') != '1':
     ref = reference ()
     libs = sys.argv[1:] or [os.path.join (os.path.dirname (os.path.abspath (__file__)), '../../../lib/libcsf.so')]
     for lp in libs:
@@ -91,3 +91,43 @@ if __name__ == '__main__':
         print ('%s  wrong/total: ' % os.path.basename (os.path.dirname (lp) or lp) +
                '  '.join ('%s %d/%d' % (tp, cnt[tp], tot[tp]) for tp in ('hdiag','spin','single','pairhop','double')))
         for tp, e in ex.items (): print ('    e.g. %-7s %s' % (tp, e))
+
+def stream (libpath, verbose=True):
+    '''Low-memory variant: build each reference, compare, and discard (FULLCHECK_STREAM=1).'''
+    import time
+    if not (getattr (csfmod.libcsf, '_name', None) == libpath): csfmod.libcsf = ctypes.CDLL (libpath)
+    cnt = collections.Counter (); tot = collections.Counter (); ex = {}
+    names = ('hdiag', 'spin', 'single', 'pairhop', 'double')
+    for key in systems ():
+        n, smult, ne = key
+        t = CSFTransformer (NORB, ne[0], ne[1], smult)
+        if t.ncsf == 0: continue
+        t0 = time.perf_counter ()
+        h2eff = sol.absorb_h1e (h1e, g2e, NORB, ne, .5)
+        ndet = t.ndeta*t.ndetb
+        hdet = np.zeros ((ndet, ndet))
+        for i in range (ndet):
+            c = np.zeros (ndet); c[i] = 1
+            hdet[i] = sol.contract_2e (h2eff, c.reshape (t.ndeta, t.ndetb), NORB, ne).ravel ()
+        U = np.empty ((ndet, t.ncsf))
+        for k in range (t.ncsf):
+            v = np.zeros (t.ncsf); v[k] = 1; U[:,k] = t.vec_csf2det (v).ravel ()
+        R = U.T @ hdet @ U
+        del hdet, U
+        typ = types_of (occ_of (t))
+        _, A = sol.pspace (h1e, g2e, NORB, ne, smult=smult, csf_addr=np.arange (t.ncsf, dtype=np.int32), npsp=t.ncsf)
+        bad = np.abs (np.tril (A - R)) > 1e-8
+        low = np.tril (np.ones (bad.shape, dtype=bool))
+        for tp in names:
+            m = (typ == tp) & low
+            tot[tp] += int (m.sum ()); nb = int ((bad & m).sum ()); cnt[tp] += nb
+            if nb and tp not in ex:
+                i, j = np.argwhere (bad & m)[0]
+                ex[tp] = (key, t.printable_csfstring (int (i)), t.printable_csfstring (int (j)), float (A[i,j]), float (R[i,j]))
+        if verbose: print ('  %-20s ncsf %5d ndet %5d  %.1fs  wrong so far: %s' % (key, t.ncsf, ndet, time.perf_counter () - t0, sum (cnt.values ())), flush=True)
+    print ('wrong/total: ' + '  '.join ('%s %d/%d' % (tp, cnt[tp], tot[tp]) for tp in names))
+    for tp, e in ex.items (): print ('    e.g. %-7s %s' % (tp, e))
+
+if __name__ == '__main__' and os.environ.get ('FULLCHECK_STREAM') == '1':
+    for lp in (sys.argv[1:] or [os.path.join (os.path.dirname (os.path.abspath (__file__)), '../../../lib/libcsf.so')]):
+        stream (lp)
