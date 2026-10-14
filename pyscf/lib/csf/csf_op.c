@@ -41,6 +41,50 @@
 #define PAIR_MID2(x) ((x)+1)
 #endif
 
+// Record where the formally-undefined pair intermediates were stored so that callers can
+// replace them by a well-defined function of the other (facing) chain; see _fix_pair_mids.
+// DUMMY_RULE 0 keeps the historical up-then-down value (PAIR_MID1/2).
+#ifndef DUMMY_RULE
+#define DUMMY_RULE 0
+#endif
+static __thread unsigned int * _dummy_arr[4];
+static __thread unsigned int _dummy_idx[4];
+static __thread int _ndummy = 0;
+static void _record_dummy (unsigned int * arr, unsigned int idx){
+    assert (_ndummy < 4);
+    _dummy_arr[_ndummy] = arr;
+    _dummy_idx[_ndummy] = idx;
+    _ndummy++;
+}
+static void _shift_dummies (unsigned int * arr, unsigned int from){
+    for (int k=0; k<_ndummy; k++){ if ((_dummy_arr[k]==arr) && (_dummy_idx[k]>=from)){ _dummy_idx[k] += 2; } }
+}
+static void _fix_pair_mids (unsigned int * twoSk, unsigned int * twoSb, int rule)
+{
+    // For each recorded intermediate P[k] of a pair spanning P[k+1] -> P[k] -> P[k-1] (P[k+1] == P[k-1] == v),
+    // choose P[k] from the facing chain O. dO1 = O[k]-O[k+1], dO2 = O[k-1]-O[k].
+    for (int d=0; d<_ndummy; d++){
+        unsigned int * P = _dummy_arr[d];
+        unsigned int * O = (P==twoSk) ? twoSb : twoSk;
+        unsigned int k = _dummy_idx[d];
+        int v = (int) P[k+1];
+        int dO1 = (int) O[k] - (int) O[k+1];
+        int dO2 = (int) O[k-1] - (int) O[k];
+        int x;
+        switch (rule){
+            case 1: x = v-1; break;          // down-then-up
+            case 2: x = v-dO1; break;        // antiparallel to facing step 1
+            case 3: x = v+dO1; break;        // parallel to facing step 1
+            case 4: x = v+dO2; break;        // antiparallel to facing step 2
+            case 5: x = v-dO2; break;        // parallel to facing step 2
+            case 6: x = (int) O[k]; break;   // copy facing chain
+            default: x = v+1;
+        }
+        if ((x < 0) || (abs (x-v) != 1)){ x = v+1; }
+        P[k] = (unsigned int) x;
+    }
+}
+
 void FCICSFmakeS2mat (double * S2mat, uint64_t * detstr, size_t ndet, int nspin, int twoMS)
 {
 
@@ -845,6 +889,7 @@ void _get_spinindices1 (Str3 * addr, unsigned int p, unsigned int nspin,
             twoS[r+2] = twoS[r];
         }
         twoS[(*sp)+1] = PAIR_MID1 (twoS[(*sp)]);
+        _record_dummy (twoS, (*sp)+1);
         (*sp)++;
     }
 }
@@ -872,7 +917,9 @@ void _get_spinindices2 (Str3 * addr, unsigned int p, unsigned int q,
             assert ((int) (r+2) < (int) (nspin+1));
             twoS[r+2] = twoS[r];
         }
+        _shift_dummies (twoS, (*sp));
         twoS[(*sp)+1] = PAIR_MID2 (twoS[(*sp)]);
+        _record_dummy (twoS, (*sp)+1);
         (*sp)++;
     } 
 }
@@ -912,6 +959,7 @@ double csf_Eai (Str3 * bra, Str3 * ket, unsigned int a, unsigned int i)
     unsigned int * twoSk = malloc ((nspin+1) * sizeof (unsigned int));
     unsigned int * twoSb = malloc ((nspin+1) * sizeof (unsigned int));
     unsigned int si, sa;
+    _ndummy = 0;
     _get_spinindices1 (bra, a, nspin, twoSb, &sa);
     _get_spinindices1 (ket, i, nspin, twoSk, &si);
     if (abs (na) == 2){ sa++; }
@@ -951,6 +999,7 @@ double csf_Sai (Str3 * bra, Str3 * ket, unsigned int a, unsigned int i, int twoM
     unsigned int * twoSk = malloc ((nspin+1) * sizeof (unsigned int));
     unsigned int * twoSb = malloc ((nspin+1) * sizeof (unsigned int));
     unsigned int si, sa;
+    _ndummy = 0;
     _get_spinindices1 (bra, a, nspin, twoSb, &sa);
     _get_spinindices1 (ket, i, nspin, twoSk, &si);
     if (abs (na) == 2){ sa++; }
@@ -1017,6 +1066,7 @@ double csf_EaiEaj (Str3 * bra, Str3 * ket,
     unsigned int * twoSk = malloc ((nspin+1) * sizeof (unsigned int));
     unsigned int * twoSb = malloc ((nspin+1) * sizeof (unsigned int));
     unsigned int si, sj;
+    _ndummy = 0;
     _get_spinindices2 (ket, i, j, nspin, twoSk, &si, &sj);
     if (abs (ni) == 2){ si++; }
     for (unsigned int r=0; r <= nspin_bra; r++){
@@ -1026,6 +1076,7 @@ double csf_EaiEaj (Str3 * bra, Str3 * ket,
     // the pair spins in a'a
     twoSb[nspin_bra+1] = 1;
     twoSb[nspin_bra+2] = 0;
+    _fix_pair_mids (twoSk, twoSb, DUMMY_RULE);
     int parity = si + sj;
     double fac = CGC_1e (twoSk, twoSb, si, sj, ni, nj, nspin);
     if ((parity%2)==1){ fac = -fac; }
@@ -1144,8 +1195,10 @@ double csf_EaiEbj (Str3 * bra, Str3 * ket,
     unsigned int * twoSk = malloc ((nspin+1) * sizeof (unsigned int));
     unsigned int * twoSb = malloc ((nspin+1) * sizeof (unsigned int));
     unsigned int si, sa, sj, sb;
+    _ndummy = 0;
     _get_spinindices2 (bra, a, b, nspin, twoSb, &sa, &sb);
     _get_spinindices2 (ket, i, j, nspin, twoSk, &si, &sj);
+    _fix_pair_mids (twoSk, twoSb, DUMMY_RULE);
     if (abs (na) == 2){ sa++; }
     // The line above looks like double-counting in the case that a==b
     // But, of course, the case that a==b (or i==j) can't get here, because
