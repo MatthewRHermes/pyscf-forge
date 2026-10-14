@@ -520,15 +520,23 @@ double CGC_2e_X (unsigned int * twoSk, unsigned int *twoSb,
         twoS0k = twoSk[i];
         twoS0b = twoSb[i];
         // paired electrons don't have CG coefficients!
-        if (((i==t) || (i==t+1)) && nt==2){ twoS0k = 0; }
-        if (((i==q) || (i==q-1)) && nq==2){ twoS0k = 0; } // TODO: not sure if off by 1!
-        if (((i==r) || (i==r-1)) && nr==2){ twoS0k = 0; } // TODO: not sure if off by 1!
-        if (((i==(p-1)) || (i==(p-2))) && np==2){ twoS0k = 0; }
+        // Each doubly-occupied operator orbital removes two factors. If two pairs are adjacent in
+        // the same chain their claims overlap on one index, and one factor is left over; since a
+        // pair doesn't change the running spin, it equals (2S+1) at the shared index.
+        int claimk = 0, claimb = 0;
+        if (((i==t) || (i==t+1)) && nt==2){ claimk++; }
+        if (((i==q) || (i==q-1)) && nq==2){ claimk++; } // TODO: not sure if off by 1!
+        if (((i==r) || (i==r-1)) && nr==2){ claimk++; } // TODO: not sure if off by 1!
+        if (((i==(p-1)) || (i==(p-2))) && np==2){ claimk++; }
+        if (claimk){ twoS0k = 0; }
         bool bra_paired = false;
-        if (((i==t) || (i==t+1)) && nt==-2){ twoS0b = 0; bra_paired = true; }
-        if (((i==q) || (i==q-1)) && nq==-2){ twoS0b = 0; bra_paired = true; } // TODO: not sure if off by 1!
-        if (((i==r) || (i==r-1)) && nr==-2){ twoS0b = 0; bra_paired = true; } // TODO: not sure if off by 1!
-        if (((i==(p-1)) || (i==(p-2))) && np==-2){ twoS0b = 0; bra_paired = true; }
+        if (((i==t) || (i==t+1)) && nt==-2){ claimb++; }
+        if (((i==q) || (i==q-1)) && nq==-2){ claimb++; } // TODO: not sure if off by 1!
+        if (((i==r) || (i==r-1)) && nr==-2){ claimb++; } // TODO: not sure if off by 1!
+        if (((i==(p-1)) || (i==(p-2))) && np==-2){ claimb++; }
+        if (claimb){ twoS0b = 0; bra_paired = true; }
+        for (int c=1; c<claimk; c++){ xdiag /= (double) (twoSk[i]+1); }
+        for (int c=1; c<claimb; c++){ xdiag /= (double) (twoSb[i]+1); }
         // This bugfix came from this session:
         // claude --resume 5c6acb8f-5f71-43d9-b6a5-02f8e5be130b
         // Exactly one of the two CGs at the left boundary is spurious. Normally it is the
@@ -1109,6 +1117,9 @@ double csf_EaiEaj (Str3 * bra, Str3 * ket,
 #ifndef CSF_2E_RI
 #define CSF_2E_RI 0
 #endif
+#ifndef CSF_EAIEBJ_PART
+#define CSF_EAIEBJ_PART 0
+#endif
 #ifndef CSF_PPHH_GRAPHICAL
 #define CSF_PPHH_GRAPHICAL 0
 #endif
@@ -1549,6 +1560,9 @@ double csf_EaiEbj (Str3 * bra, Str3 * ket,
     assert (facl==facl);
     assert (facu==facu);
     if (DEBUG_2E){ printf ("final value = %e + %e\n\n", facl,facu); fflush (stdout); }
+    // debugging hook: -DCSF_EAIEBJ_PART=1 (linked only) or 2 (unlinked only)
+    if (CSF_EAIEBJ_PART == 1){ return facl; }
+    if (CSF_EAIEBJ_PART == 2){ return facu; }
     return facl+facu; 
 }
 
