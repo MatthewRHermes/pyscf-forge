@@ -16,3 +16,8 @@ Scratch tooling from the csf_mem_reads debugging session (Claude-assisted). Not 
   excitation type.  References are cached in `/tmp/claude-...` or $FULLCHECK_CACHE.
 * `runtests.sh [lib.so]` -- the tests that must keep passing: test_csf_2elec, test_csf_spinless,
   test_csf_1eop, and test_csf_4elec with skips removed (only smult=4 is expected to pass).
+* `count4.py [lib.so]` -- wrong off-diagonal elements in test_csf_4elec per (smult, m).
+* `scan2e.py`, `scan2e_rec.py`, `scan_pair.py lib.so 6 [out.pkl]` -- per-call exact comparison of
+  `csf_EaiEbj` for distinct-index doubles (with the Fierz linked/unlinked split) or pair hops.
+* `-DCSF_2E_RI=1` (csf_op.c): evaluate every Str3_link==2 element by resolution of the identity over
+  the intermediate occupation's CSFs, using only csf_Eai. Exact; used as an in-C oracle.

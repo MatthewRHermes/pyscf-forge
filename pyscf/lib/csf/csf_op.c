@@ -1088,6 +1088,92 @@ double csf_EaiEaj (Str3 * bra, Str3 * ket,
 
 }
 
+
+// Resolution-of-the-identity evaluation of two-electron spin-free operator products, built only
+// from the (fully validated) one-electron csf_Eai. Because E_pq is spin-free, E_bj|ket> lies in the
+// span of the CSFs of its occupation with the same S and M, so
+//     <bra|E_ai E_bj|ket> = sum_m <bra|E_ai|m> <m|E_bj|ket>
+// exactly, with m running over all genealogical couplings of the intermediate occupation.
+// Brute-force enumeration of the couplings; meant as an oracle (-DCSF_2E_RI=1 uses it everywhere).
+#ifndef CSF_2E_RI
+#define CSF_2E_RI 0
+#endif
+static void _occ_of (Str3 * s, unsigned int norb, int * occ){
+    for (unsigned int p=0; p<norb; p++){ occ[p] = (int) _get_occ (s, p); }
+}
+static bool _str3_from_occ (int * occ, unsigned int norb, Str3 * s, unsigned int * nopen){
+    s->dconf = 0ULL; s->sconf = 0ULL; s->spin = 0ULL;
+    unsigned int k = 0; *nopen = 0;
+    for (unsigned int p=0; p<norb; p++){
+        if ((occ[p] < 0) || (occ[p] > 2)){ return false; }
+        if (occ[p] == 2){ s->dconf |= (1ULL << p); continue; }
+        if (occ[p] == 1){ s->sconf |= (1ULL << k); (*nopen)++; }
+        k++;
+    }
+    return true;
+}
+static bool _str3_eq (Str3 * x, Str3 * y){
+    uint64_t sx = (x->sconf == 0ULL) ? 0ULL : x->spin;
+    uint64_t sy = (y->sconf == 0ULL) ? 0ULL : y->spin;
+    return (x->dconf == y->dconf) && (x->sconf == y->sconf) && (sx == sy);
+}
+// <bra|E_ai|ket> for arbitrary a, i (including a == i), returning 0 for inconsistent occupations
+static double _csf_E1 (Str3 * bra, Str3 * ket, unsigned int a, unsigned int i, unsigned int norb){
+    int ob[64], ok[64];
+    _occ_of (bra, norb, ob); _occ_of (ket, norb, ok);
+    if (a == i){
+        if (!_str3_eq (bra, ket)){ return 0.0; }
+        return (double) ok[i];
+    }
+    ok[i]--; ok[a]++;
+    for (unsigned int p=0; p<norb; p++){ if (ok[p] != ob[p]){ return 0.0; } }
+    return csf_Eai (bra, ket, a, i);
+}
+static unsigned int _norb_of (Str3 * x, Str3 * y){
+    // orbitals actually needed to describe both strings
+    unsigned int n = 1;
+    for (unsigned int p=0; p<64; p++){ if ((_get_occ (x, p) > 0) || (_get_occ (y, p) > 0)){ n = p+1; } }
+    return n;
+}
+double csf_EaiEbj_ri (Str3 * bra, Str3 * ket, unsigned int a, unsigned int i, unsigned int b, unsigned int j)
+{
+    unsigned int norb = MAX (_norb_of (bra, ket), MAX (MAX (a, i), MAX (b, j)) + 1);
+    int om[64];
+    _occ_of (ket, norb, om);
+    if (b == j){ return ((double) om[j]) * _csf_E1 (bra, ket, a, i, norb); }
+    om[j]--; om[b]++;
+    Str3 m;
+    unsigned int nopen;
+    if (!_str3_from_occ (om, norb, &m, &nopen)){ return 0.0; }
+    unsigned int nspin_ket = count_set_bits (ket->sconf);
+    unsigned int twoS = (ket->sconf == 0ULL) ? 0 : _get_twoS_running (ket->spin, 0, nspin_ket);
+    if ((nopen < twoS) || ((nopen - twoS) % 2)){ return 0.0; }
+    unsigned int nup = (nopen + twoS) / 2;
+    double sum = 0.0;
+    if (nopen == 0){
+        m.spin = 0ULL;
+        return _csf_E1 (bra, &m, a, i, norb) * _csf_E1 (&m, ket, b, j, norb);
+    }
+    // iterate over all nopen-bit strings with nup set bits (Gosper's hack)
+    uint64_t x = (nup == 0) ? 0ULL : ((1ULL << nup) - 1ULL);
+    uint64_t lim = 1ULL << nopen;
+    while (x < lim){
+        // valid genealogical coupling: running spin never negative, counting from bit 0
+        int run = 0; bool ok = true;
+        for (unsigned int k=0; k<nopen; k++){ run += ((x >> k) & 1ULL) ? 1 : -1; if (run < 0){ ok = false; break; } }
+        if (ok){
+            m.spin = x;
+            double f2 = _csf_E1 (&m, ket, b, j, norb);
+            if (f2 != 0.0){ sum += _csf_E1 (bra, &m, a, i, norb) * f2; }
+        }
+        if (x == 0ULL){ break; }
+        uint64_t c = x & (~x + 1ULL);
+        uint64_t r = x + c;
+        x = (((r ^ x) >> 2) / c) | r;
+    }
+    return sum;
+}
+
 double csf_EaiEbj (Str3 * bra, Str3 * ket,
                    unsigned int a, unsigned int i,
                    unsigned int b, unsigned int j)
@@ -1471,13 +1557,19 @@ void FCICSFpspace_h0tril(double *hmat,
             exc2_sort (&bra, &ket, p, r, q, t, &a, &i, &b, &j);
             // E^a_i E^b_j
             ihop = (a*norb*norb*norb) + (i*norb*norb) + (b*norb) + j;
-            fac = csf_EaiEbj (&bra, &ket, a, i, b, j);
+            if (CSF_2E_RI){
+                fac = csf_EaiEbj_ri (&bra, &ket, a, i, b, j);
+                // a==b and i==j: only one ordering, so the 1/2 of the Hamiltonian survives
+                if ((a==b) && (i==j)){ fac *= 0.5; }
+            } else {
+                fac = csf_EaiEbj (&bra, &ket, a, i, b, j);
+            }
             if (DEBUG_2E){ printf (" %u %u %u %u %f\n", a,i,b,j,fac); fflush (stdout); }
             hmat[ihmat] += g2e[ihop] * fac;
             // E^a_j E^b_i
             if ((a!=b) && (i!=j)){
                 ihop = (a*norb*norb*norb) + (j*norb*norb) + (b*norb) + i;
-                fac = csf_EaiEbj (&bra, &ket, a, j, b, i);
+                fac = CSF_2E_RI ? csf_EaiEbj_ri (&bra, &ket, a, j, b, i) : csf_EaiEbj (&bra, &ket, a, j, b, i);
                 if (DEBUG_2E){ printf (" %u %u %u %u %f\n", a,j,b,i,fac); fflush (stdout); }
                 hmat[ihmat] += g2e[ihop] * fac;
             }
