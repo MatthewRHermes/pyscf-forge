@@ -1109,6 +1109,9 @@ double csf_EaiEaj (Str3 * bra, Str3 * ket,
 #ifndef CSF_2E_RI
 #define CSF_2E_RI 0
 #endif
+#ifndef CSF_PPHH_GRAPHICAL
+#define CSF_PPHH_GRAPHICAL 0
+#endif
 static void _occ_of (Str3 * s, unsigned int norb, int * occ){
     for (unsigned int p=0; p<norb; p++){ occ[p] = (int) _get_occ (s, p); }
 }
@@ -1185,6 +1188,68 @@ double csf_EaiEbj_ri (Str3 * bra, Str3 * ket, unsigned int a, unsigned int i, un
     return sum;
 }
 
+// Same identity as csf_EaiEbj_ri, but enumerating only the intermediate couplings that can
+// contribute: <m|E_bj|ket> vanishes unless m and ket have identical couplings outside the orbital
+// range spanned by (b,j), and <bra|E_ai|m> unless m and bra agree outside the range of (a,i).
+// So only the open shells of m inside both ranges are free.
+static void _steps_of (Str3 * s, unsigned int norb, int * step){
+    // step[p] = +1/-1 for the coupling step of open shell p, 0 if p is not singly occupied
+    unsigned int k = 0;
+    for (unsigned int p=0; p<norb; p++){
+        step[p] = 0;
+        if (_get_occ (s, p) == 1){ step[p] = ((s->spin >> k) & 1ULL) ? 1 : -1; k++; }
+    }
+}
+double csf_EaiEbj_ri_local (Str3 * bra, Str3 * ket, unsigned int a, unsigned int i, unsigned int b, unsigned int j)
+{
+    unsigned int norb = MAX (_norb_of (bra, ket), MAX (MAX (a, i), MAX (b, j)) + 1);
+    int om[64], sb[64], sk[64], sm[64], freep[64];
+    _occ_of (ket, norb, om);
+    if (b == j){ return ((double) om[j]) * _csf_E1 (bra, ket, a, i, norb); }
+    om[j]--; om[b]++;
+    Str3 m;
+    unsigned int nopen;
+    if (!_str3_from_occ (om, norb, &m, &nopen)){ return 0.0; }
+    _steps_of (bra, norb, sb); _steps_of (ket, norb, sk);
+    unsigned int lo1 = MIN (b, j), hi1 = MAX (b, j), lo2 = MIN (a, i), hi2 = MAX (a, i);
+    int nfree = 0;
+    for (unsigned int p=0; p<norb; p++){
+        sm[p] = 0;
+        if (om[p] != 1){ continue; }
+        bool in1 = (p >= lo1) && (p <= hi1);
+        bool in2 = (p >= lo2) && (p <= hi2);
+        if (in1 && in2){ freep[nfree++] = (int) p; continue; }
+        if (!in1 && !in2){
+            if ((sk[p] == 0) || (sk[p] != sb[p])){ return 0.0; }
+            sm[p] = sk[p];
+        } else if (!in1){
+            if (sk[p] == 0){ return 0.0; }
+            sm[p] = sk[p];
+        } else {
+            if (sb[p] == 0){ return 0.0; }
+            sm[p] = sb[p];
+        }
+    }
+    unsigned int nspin_ket = count_set_bits (ket->sconf);
+    int twoS = (ket->sconf == 0ULL) ? 0 : (int) _get_twoS_running (ket->spin, 0, nspin_ket);
+    double sum = 0.0;
+    for (uint64_t x=0; x < (1ULL << nfree); x++){
+        for (int f=0; f<nfree; f++){ sm[freep[f]] = ((x >> f) & 1ULL) ? 1 : -1; }
+        int run = 0; bool ok = true; uint64_t spin = 0ULL; unsigned int k = 0;
+        for (unsigned int p=0; p<norb; p++){
+            if (sm[p] == 0){ continue; }
+            run += sm[p]; if (run < 0){ ok = false; break; }
+            if (sm[p] > 0){ spin |= (1ULL << k); }
+            k++;
+        }
+        if (!ok || (run != twoS)){ continue; }
+        m.spin = (m.sconf == 0ULL) ? 0ULL : spin;
+        double f2 = _csf_E1 (&m, ket, b, j, norb);
+        if (f2 != 0.0){ sum += _csf_E1 (bra, &m, a, i, norb) * f2; }
+    }
+    return sum;
+}
+
 double csf_EaiEbj (Str3 * bra, Str3 * ket,
                    unsigned int a, unsigned int i,
                    unsigned int b, unsigned int j)
@@ -1199,6 +1264,13 @@ double csf_EaiEbj (Str3 * bra, Str3 * ket,
     }
     if (a > b){
         return csf_EaiEbj (bra, ket, b, j, a, i);
+    }
+    // pphh (both creators below both annihilators): the graphical evaluation below (CGC_2e_X with
+    // qt_pp/pr_pp and the CGC_1e pphh branch) reads the undefined intermediate spin of doubly-
+    // occupied orbitals and is wrong for most mixed-spin cases; evaluate exactly instead.
+    // -DCSF_PPHH_GRAPHICAL=1 restores the graphical path for further derivation work.
+    if (!CSF_PPHH_GRAPHICAL && (b < i) && (b < j)){
+        return csf_EaiEbj_ri_local (bra, ket, a, i, b, j);
     }
     if (DEBUG_2E){
     printf ("\n<%lu,%lu,%lu|%u'%u,%u'%u|%lu,%lu,%lu>\n",
