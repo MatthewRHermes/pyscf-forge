@@ -63,3 +63,14 @@ This is the code path (CGC_2e_X with qt_pp/offb=-2, CGC_1e pphh branch with twoS
 re-deriving rather than patching.
 
 Cost of the local RI for pphh vs the (wrong) graphical pphh: +10-25% pspace wall time (timing.py).
+
+## Broader regression check (567d5a9)
+
+`pytest pyscf/csf_fci/test` (as committed) plus every other forge test that uses csf_solver
+(siso/test_siso_modelspace, prop/dip_moment/test_{lpdft,mcpdft,cmspdft,sapdft}_pdm,
+prop/trans_dip_moment/test_cmspdft_tdm, mcdcft/test_energy_h2), OMP=6:
+
+* csf_mem (ce1d5c8 + its build): 30 failed, 49 passed -- including 6 subtests of
+  test_lpdft_pdm.py (h2o L-PDFT dipoles, ftLDA and ftPBE), i.e. the 2e pspace bugs reach real
+  MC-PDFT property calculations.
+* csf_mem_reads: 49 passed, 6 skipped, 935 subtests, 0 failed.
