@@ -1422,7 +1422,7 @@ void FCICSFpspace_h0tril(double *hmat,
                 fac = csf_Sai (&bra, &ket, p, p, twoM);
                 hmat[ihmat] += fac * h1e_s[ihop];
                 // eri exchange
-                for (q=p; q<norb; q++){
+                for (q=p+1; q<norb; q++){
                     if (_get_occ(&bra, q) != 1){ continue ; }
                     ihop = p*((norb*norb*norb) + 1) + q*(norb+1)*norb;
                     fac = csf_EaiEbj (&bra, &ket, p, q, q, p);
