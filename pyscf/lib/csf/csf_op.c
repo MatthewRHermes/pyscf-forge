@@ -1137,21 +1137,16 @@ static bool _str3_from_occ (int * occ, unsigned int norb, Str3 * s, unsigned int
     }
     return true;
 }
-static bool _str3_eq (Str3 * x, Str3 * y){
-    uint64_t sx = (x->sconf == 0ULL) ? 0ULL : x->spin;
-    uint64_t sy = (y->sconf == 0ULL) ? 0ULL : y->spin;
-    return (x->dconf == y->dconf) && (x->sconf == y->sconf) && (sx == sy);
-}
-// <bra|E_ai|ket> for arbitrary a, i (including a == i), returning 0 for inconsistent occupations
+// <bra|E_ai|ket>, a != i. The RI callers build every intermediate so that the occupations are
+// consistent; csf_Eai does not check them (its escapes test only the spin couplings), so assert it.
 static double _csf_E1 (Str3 * bra, Str3 * ket, unsigned int a, unsigned int i, unsigned int norb){
+    assert (a != i);
+#ifndef NDEBUG
     int ob[64], ok[64];
     _occ_of (bra, norb, ob); _occ_of (ket, norb, ok);
-    if (a == i){
-        if (!_str3_eq (bra, ket)){ return 0.0; }
-        return (double) ok[i];
-    }
     ok[i]--; ok[a]++;
-    for (unsigned int p=0; p<norb; p++){ if (ok[p] != ob[p]){ return 0.0; } }
+    for (unsigned int p=0; p<norb; p++){ assert (ok[p] == ob[p]); }
+#endif
     return csf_Eai (bra, ket, a, i);
 }
 static unsigned int _norb_of (Str3 * x, Str3 * y){
