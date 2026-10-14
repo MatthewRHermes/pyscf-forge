@@ -13,7 +13,8 @@ test_csf_1eop, or test_csf_4elec smult=4; then debug test_csf_4elec.
   legal value and counts pspace elements that change (path dependence). Positive control:
   `probe.py <copy with CSF_PPHH_GRAPHICAL=1>` still finds the 14 reads.
 * `fullcheck.py` -- all-CSF pspace (with hdiag) vs exact `U^T H_det U` for every electron count and
-  spin, random spin-dependent integrals, norb=6 (FULLCHECK_NORB=7 also works).
+  spin, random spin-dependent integrals, norb=6 (FULLCHECK_NORB=7 also works; use
+  FULLCHECK_STREAM=1 for norb=8).
 * `scan2e.py`/`scan2e_rec.py`/`scan_pair.py`/`pairscan.py` -- per-call comparisons of `csf_EaiEbj`.
   The Fierz split used: r=i (no linked graph) U=c1; phph (r=j) U=-c2/2, L=c1+c2/2;
   pphh (r=b) U=(c1+c2)/2 (singlet channel), L=(c1-c2)/2 (triplet channel); c1=<E_ai E_bj>, c2=<E_aj E_bi>.
@@ -52,6 +53,10 @@ Singles are 100% correct, which is the lever used below.
    survives (the linked term came out sqrt(2S+1) too large; never the unlinked term). Counting
    claims per index and dividing the leftover fixes all remaining phph errors.
    fullcheck norb=6 and norb=7: 0 wrong in every category.
+8. `da01fe1` fullcheck low-memory streaming mode. `FULLCHECK_STREAM=1 FULLCHECK_NORB=8`: all 71
+   systems, 0 wrong out of ~8.38M lower-triangle elements (hdiag 36684, spin 37029, single 1444464,
+   pair hop 1810116, double 5053860). This reaches spectator patterns norb=6 can't (up to 4 open
+   spectators around a double). ~15 min total, largest system 36 s, memory well under 1 GB.
 
 ## State of the graphical pphh path (CSF_PPHH_GRAPHICAL=1), for future derivation
 
